@@ -1,0 +1,11 @@
+.email{
+    color: #04414d;
+}
+
+.navbar-custom{
+    background-color: #04414d;
+}
+
+#sideNav {
+    background-color:#04414d !important; /* Bootstrap primary blue color */
+}

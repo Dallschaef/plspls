@@ -1,0 +1,67 @@
+body{
+    background-image: url('../scratchpages/images/IMG_8368\ \(1\).JPG');
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+
+.common{ 
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: black;
+    background-color: white;
+    border: 2px solid black;
+    position: absolute;
+}
+
+.header{
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    height: 50px;
+    font-size: xx-large;
+    text-align: center;
+}
+
+.nav{
+    top: 70px;
+    left: 10px;
+    right: 10px;
+    height: 30px;
+    font-size: x-large;
+    text-align: center;
+}
+
+.content{
+    top: 110px;
+    right: 740px;
+    left: 10px;
+    bottom: 10px;
+    text-align: center;
+    list-style-position: inside;
+    font-size: x-large;
+    height: 855px;
+}
+
+.footer{
+    bottom: 0px;
+    position: fixed;
+    text-align: left;
+    left: 10px;
+    right: 10px;
+
+}
+
+.video{
+    top: 110px;
+    right: 10px;
+    left: 740px;
+    bottom: 10px;
+    height: 855px;
+    text-align: center;
+}
+
+.jordy{
+    position: absolute;
+    top: 1000px;
+    left: 570px;
+    bottom: 20px;
+}

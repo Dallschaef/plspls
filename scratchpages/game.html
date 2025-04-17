@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Downhill Skater</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        /* Apply Arcade Font globally */
+        body, button, input, select, textarea {
+            font-family: 'Press Start 2P', cursive;
+        }
+        /* Custom style for the road gradient */
+        #game-container {
+             background: linear-gradient(to bottom, #87CEEB 65%, #6b7280 65%); /* Sky blue to gray road */
+        }
+        /* Ensure canvas/container takes up space */
+         #game-container {
+            width: 90vw; /* Responsive width */
+            max-width: 450px; /* Max width for larger screens */
+            height: 75vh; /* Responsive height */
+            max-height: 650px; /* Max height */
+        }
+        /* Style for the skater (can be replaced with an image) */
+        #skater {
+             width: 35px;
+             height: 55px;
+             background-color: #ef4444; /* Red-500 */
+             /* Example using SVG inline */
+             /* background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='20' y='30' width='60' height='40' fill='red'/%3E%3Ccircle cx='35' cy='75' r='10' fill='black'/%3E%3Ccircle cx='65' cy='75' r='10' fill='black'/%3E%3C/svg%3E"); */
+             /* background-size: contain; */
+             /* background-repeat: no-repeat; */
+        }
+         /* Style for obstacles (can be replaced with an image) */
+        .obstacle {
+            width: 45px;
+            height: 25px;
+            background-color: #a16207; /* Yellow-700 (like a cone or block) */
+             /* Example using SVG inline */
+            /* background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,10 20,90 80,90' fill='orange'/%3E%3C/svg%3E"); */
+            /* background-size: contain; */
+            /* background-repeat: no-repeat; */
+        }
+    </style>
+</head>
+<body class="bg-gray-800 text-white flex flex-col justify-center items-center min-h-screen p-4">
+
+    <h1 class="text-3xl mb-4 text-yellow-400">Downhill Skater</h1>
+
+    <div id="instructions" class="mb-3 text-center text-sm">
+        Use <kbd class="border border-gray-500 px-1 rounded mx-1">←</kbd> / <kbd class="border border-gray-500 px-1 rounded mx-1">→</kbd> Arrow Keys to Dodge!
+        <br> Press <kbd class="border border-gray-500 px-1 rounded mx-1">Enter</kbd> to Start.
+    </div>
+
+    <div id="game-container" class="border-4 border-black rounded-lg relative overflow-hidden shadow-2xl mb-4">
+        <div id="skater" class="absolute bottom-5 rounded"></div>
+        </div>
+
+    <div id="score-board" class="text-xl font-bold text-yellow-400">Score: <span id="score">0</span></div>
+
+    <div id="game-over" class="hidden absolute inset-0 bg-black bg-opacity-75 flex flex-col justify-center items-center text-center p-6 z-10">
+        <h2 class="text-4xl mb-4 text-red-500">Game Over!</h2>
+        <p class="text-2xl mb-6">Final Score: <span id="final-score" class="text-yellow-400">0</span></p>
+        <button id="restart-button" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-200 ease-in-out transform hover:scale-105">
+            Restart Game
+        </button>
+    </div>
+
+    <audio id="background-music" loop>
+        <source src="path/to/your/arcade-rock.mp3" type="audio/mpeg">
+        Your browser does not support the audio element. Please use a modern browser.
+    </audio>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Element References ---
+            const gameContainer = document.getElementById('game-container');
+            const skater = document.getElementById('skater');
+            const scoreDisplay = document.getElementById('score');
+            const gameOverDisplay = document.getElementById('game-over');
+            const finalScoreDisplay = document.getElementById('final-score');
+            const restartButton = document.getElementById('restart-button');
+            const instructions = document.getElementById('instructions');
+            const backgroundMusic = document.getElementById('background-music');
+
+            // --- Game Configuration ---
+            const skaterMoveStep = 25; // Pixels skater moves horizontally per key press
+            const baseObstacleSpeed = 3.5; // Initial speed obstacles move down (pixels per frame)
+            const baseSpawnInterval = 1800; // Initial time between obstacle spawns (ms)
+            const speedIncreaseInterval = 8000; // How often to increase difficulty (ms)
+            const speedIncrement = 0.4;       // How much to increase speed each time
+            const spawnDecrement = 100;       // How much to decrease spawn interval (ms)
+            const minSpawnInterval = 500;     // Minimum time between spawns
+
+            // --- Game State Variables ---
+            let gameWidth = gameContainer.offsetWidth;
+            let gameHeight = gameContainer.offsetHeight;
+            let skaterWidth = skater.offsetWidth;
+            let skaterHeight = skater.offsetHeight; // Get skater height for collision
+            let skaterLeft = (gameWidth - skaterWidth) / 2; // Center skater initially
+            let score = 0;
+            let obstacles = []; // Array to store obstacle data { element, left, top, width, height }
+            let gameLoopId = null; // ID for requestAnimationFrame
+            let obstacleSpeed = baseObstacleSpeed;
+            let obstacleSpawnInterval = baseSpawnInterval;
+            let isGameOver = true; // Game starts in 'over' state
+            let lastSpawnTime = 0;
+            let lastSpeedIncreaseTime = 0;
+
+            // --- Utility Functions ---
+            function pxToNum(pxValue) {
+                return parseFloat(pxValue) || 0;
+            }
+
+            // --- Core Game Functions ---
+
+            function updateGameDimensions() {
+                // Recalculate dimensions if window resizes (important for responsiveness)
+                gameWidth = gameContainer.offsetWidth;
+                gameHeight = gameContainer.offsetHeight;
+                skaterWidth = skater.offsetWidth;
+                skaterHeight = skater.offsetHeight;
+                // Recenter skater if game is over or just starting
+                if (isGameOver) {
+                     skaterLeft = (gameWidth - skaterWidth) / 2;
+                     skater.style.left = `${skaterLeft}px`;
+                }
+            }
+
+
+            function startGame() {
+                if (!isGameOver) return; // Don't start if already running
+
+                console.log("Starting game...");
+                isGameOver = false;
+                score = 0;
+                updateGameDimensions(); // Ensure dimensions are current
+                skaterLeft = (gameWidth - skaterWidth) / 2; // Center skater
+                obstacleSpeed = baseObstacleSpeed;
+                obstacleSpawnInterval = baseSpawnInterval;
+                lastSpawnTime = 0; // Reset spawn timer
+                lastSpeedIncreaseTime = Date.now(); // Start speed increase timer
+
+                // Reset UI elements
+                scoreDisplay.textContent = score;
+                skater.style.left = `${skaterLeft}px`;
+                gameOverDisplay.classList.add('hidden'); // Hide game over message
+                instructions.classList.add('hidden'); // Hide instructions during gameplay
+
+                // Clear any existing obstacles from DOM and array
+                obstacles.forEach(obs => obs.element.remove());
+                obstacles = [];
+
+                // Start background music (Note: Autoplay might be blocked by browser initially)
+                backgroundMusic.currentTime = 0; // Rewind
+                backgroundMusic.play().catch(error => {
+                    console.warn("Audio playback failed. User interaction might be required first.", error);
+                    // You might want to show a message asking the user to click to enable sound
+                });
+
+                // Start the main game loop
+                lastSpawnTime = Date.now(); // Initialize spawn time
+                gameLoopId = requestAnimationFrame(gameLoop);
+                console.log("Game loop initiated.");
+            }
+
+            function moveSkater(direction) {
+                if (isGameOver) return; // Ignore input if game is over
+
+                if (direction === 'left') {
+                    skaterLeft -= skaterMoveStep;
+                } else if (direction === 'right') {
+                    skaterLeft += skaterMoveStep;
+                }
+
+                // Enforce boundaries - prevent skater from going off-screen
+                skaterLeft = Math.max(0, skaterLeft); // Clamp minimum position to 0
+                skaterLeft = Math.min(gameWidth - skaterWidth, skaterLeft); // Clamp maximum position
+
+                skater.style.left = `${skaterLeft}px`; // Update skater's visual position
+            }
+
+            function createObstacle() {
+                const obstacleElem = document.createElement('div');
+                obstacleElem.classList.add('obstacle', 'absolute', 'rounded'); // Tailwind classes + absolute positioning
+
+                // Get obstacle dimensions from CSS (or set fixed values)
+                // Using fixed values matching CSS for simplicity here
+                const obstacleWidth = 45;
+                const obstacleHeight = 25;
+
+                // Calculate random horizontal position
+                const maxLeft = gameWidth - obstacleWidth; // Farthest left it can spawn
+                const randomLeft = Math.floor(Math.random() * maxLeft);
+                const initialTop = -obstacleHeight; // Start just above the visible area
+
+                obstacleElem.style.left = `${randomLeft}px`;
+                obstacleElem.style.top = `${initialTop}px`;
+                // Add width/height explicitly if not perfectly set by CSS alone
+                obstacleElem.style.width = `${obstacleWidth}px`;
+                obstacleElem.style.height = `${obstacleHeight}px`;
+
+
+                gameContainer.appendChild(obstacleElem); // Add to the DOM
+
+                // Store obstacle data
+                obstacles.push({
+                    element: obstacleElem,
+                    left: randomLeft,
+                    top: initialTop,
+                    width: obstacleWidth,
+                    height: obstacleHeight
+                });
+                 // console.log(`Obstacle created at L:${randomLeft}, T:${initialTop}`);
+            }
+
+            function moveObstacles() {
+                const obstaclesToRemove = []; // Keep track of obstacles that go off-screen
+
+                obstacles.forEach((obs, index) => {
+                    obs.top += obstacleSpeed; // Move obstacle down based on current speed
+                    obs.element.style.top = `${obs.top}px`; // Update visual position
+
+                    // Check if obstacle has moved past the bottom of the game area
+                    if (obs.top > gameHeight) {
+                        obstaclesToRemove.push(index); // Mark for removal
+                        obs.element.remove(); // Remove from DOM
+                        score++; // Increment score for successfully dodging
+                        scoreDisplay.textContent = score; // Update score display
+                        // console.log(`Obstacle dodged. Score: ${score}`);
+                    }
+                });
+
+                // Remove dodged obstacles from the array efficiently (iterate backwards)
+                for (let i = obstaclesToRemove.length - 1; i >= 0; i--) {
+                    obstacles.splice(obstaclesToRemove[i], 1);
+                }
+            }
+
+            function checkCollision() {
+                 // Get skater's current bounding box (position and size)
+                 // Using skaterLeft and fixed bottom position is more reliable than getBoundingClientRect sometimes
+                const skaterBottom = pxToNum(skater.style.bottom) || 20; // Use the initial CSS value (20px = bottom-5 in Tailwind)
+                const skaterTop = gameHeight - skaterBottom - skaterHeight;
+                const skaterRight = skaterLeft + skaterWidth;
+
+                for (const obs of obstacles) {
+                    // Simple Axis-Aligned Bounding Box (AABB) collision check
+                    const obsRight = obs.left + obs.width;
+                    const obsBottom = obs.top + obs.height;
+
+                    // Check for overlap
+                    if (
+                        skaterLeft < obsRight &&    // Skater's left edge is left of obstacle's right edge
+                        skaterRight > obs.left &&   // Skater's right edge is right of obstacle's left edge
+                        skaterTop < obsBottom &&    // Skater's top edge is above obstacle's bottom edge
+                        (skaterTop + skaterHeight) > obs.top // Skater's bottom edge is below obstacle's top edge
+                    ) {
+                        console.log("Collision Detected!");
+                        gameOver(); // Trigger game over sequence
+                        return true; // Collision occurred
+                    }
+                }
+                return false; // No collision detected in this frame
+            }
+
+            function increaseDifficulty() {
+                const now = Date.now();
+                // Check if enough time has passed since the last difficulty increase
+                if (now - lastSpeedIncreaseTime > speedIncreaseInterval) {
+                    obstacleSpeed += speedIncrement; // Increase obstacle speed
+                    // Decrease spawn interval, but not below the minimum
+                    obstacleSpawnInterval = Math.max(minSpawnInterval, obstacleSpawnInterval - spawnDecrement);
+                    lastSpeedIncreaseTime = now; // Reset the timer
+                    console.log(`Difficulty Increased: Speed=${obstacleSpeed.toFixed(1)}, SpawnInterval=${obstacleSpawnInterval}ms`);
+                }
+            }
+
+            function gameOver() {
+                if (isGameOver) return; // Prevent multiple calls
+
+                console.log("Game Over!");
+                isGameOver = true;
+                cancelAnimationFrame(gameLoopId); // Stop the game loop
+                gameLoopId = null;
+                backgroundMusic.pause(); // Pause the music
+
+                // Display the game over message box
+                finalScoreDisplay.textContent = score; // Show final score
+                gameOverDisplay.classList.remove('hidden'); // Make it visible
+                instructions.classList.remove('hidden'); // Show instructions again
+            }
+
+            function gameLoop() {
+                if (isGameOver) return; // Exit if game ended between frames
+
+                const now = Date.now();
+
+                // 1. Spawn new obstacles if it's time
+                if (now - lastSpawnTime > obstacleSpawnInterval) {
+                    createObstacle();
+                    lastSpawnTime = now; // Reset spawn timer
+                }
+
+                // 2. Move all existing obstacles down
+                moveObstacles();
+
+                // 3. Check for collisions between skater and obstacles
+                if (checkCollision()) {
+                    // If collision detected, gameOver() is called inside checkCollision,
+                    // and the loop will stop on the next check.
+                    return; // Stop processing this frame early
+                }
+
+                // 4. Increase difficulty periodically
+                increaseDifficulty();
+
+                // 5. Schedule the next frame
+                gameLoopId = requestAnimationFrame(gameLoop);
+            }
+
+            // --- Event Listeners ---
+
+            // Handle keyboard input
+            document.addEventListener('keydown', (event) => {
+                // Start game on Enter key press only if game is currently over
+                if (event.key === 'Enter' && isGameOver) {
+                    startGame();
+                    return; // Don't process other keys if just starting
+                }
+
+                // Ignore movement keys if game is over
+                if (isGameOver) return;
+
+                // Handle skater movement with arrow keys
+                if (event.key === 'ArrowLeft') {
+                    moveSkater('left');
+                } else if (event.key === 'ArrowRight') {
+                    moveSkater('right');
+                }
+            });
+
+            // Handle restart button click
+            restartButton.addEventListener('click', startGame);
+
+            // Handle window resize to keep game dimensions accurate
+            window.addEventListener('resize', updateGameDimensions);
+
+            // --- Initial Setup ---
+            updateGameDimensions(); // Set initial dimensions
+            skater.style.bottom = '20px'; // Ensure bottom is set (Tailwind's bottom-5)
+            console.log("Game initialized. Press Enter to start.");
+
+        }); // End DOMContentLoaded
+    </script>
+
+</body>
+</html>
